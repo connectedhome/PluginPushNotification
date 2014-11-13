@@ -33,7 +33,7 @@
 @synthesize callbackId;
 @synthesize notificationCallbackId;
 @synthesize callback;
-
+@synthesize tokenid;
 
 - (void)unregister:(CDVInvokedUrlCommand*)command;
 {
@@ -43,93 +43,59 @@
     [self successWithMessage:@"unregistered"];
 }
 
+- (void)getToken:(CDVInvokedUrlCommand*)command;
+{
+	self.callbackId = command.callbackId;
+    
+    //[[UIApplication sharedApplication] unregisterForRemoteNotifications];
+    [self successWithMessage:self.tokenid];
+}
+
+
 - (void)register:(CDVInvokedUrlCommand*)command;
 {
 	self.callbackId = command.callbackId;
 
     NSMutableDictionary* options = [command.arguments objectAtIndex:0];
 
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000
-		UIUserNotificationType UserNotificationTypes = UIUserNotificationTypeNone;
-#endif
     UIRemoteNotificationType notificationTypes = UIRemoteNotificationTypeNone;
-
     id badgeArg = [options objectForKey:@"badge"];
     id soundArg = [options objectForKey:@"sound"];
     id alertArg = [options objectForKey:@"alert"];
-
+    
     if ([badgeArg isKindOfClass:[NSString class]])
     {
-        if ([badgeArg isEqualToString:@"true"]) {
+        if ([badgeArg isEqualToString:@"true"])
             notificationTypes |= UIRemoteNotificationTypeBadge;
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000
-            UserNotificationTypes |= UIUserNotificationTypeBadge;
-#endif
-        }
     }
-    else if ([badgeArg boolValue]) {
+    else if ([badgeArg boolValue])
         notificationTypes |= UIRemoteNotificationTypeBadge;
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000
-        UserNotificationTypes |= UIUserNotificationTypeBadge;
-#endif
-    }
-
+    
     if ([soundArg isKindOfClass:[NSString class]])
     {
-        if ([soundArg isEqualToString:@"true"]) {
+        if ([soundArg isEqualToString:@"true"])
             notificationTypes |= UIRemoteNotificationTypeSound;
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000
-            UserNotificationTypes |= UIUserNotificationTypeSound;
-#endif
     }
-    }
-    else if ([soundArg boolValue]) {
+    else if ([soundArg boolValue])
         notificationTypes |= UIRemoteNotificationTypeSound;
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000
-        UserNotificationTypes |= UIUserNotificationTypeSound;
-#endif
-    }
-
+    
     if ([alertArg isKindOfClass:[NSString class]])
     {
-        if ([alertArg isEqualToString:@"true"]) {
+        if ([alertArg isEqualToString:@"true"])
             notificationTypes |= UIRemoteNotificationTypeAlert;
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000
-            UserNotificationTypes |= UIUserNotificationTypeAlert;
-#endif
     }
-    }
-    else if ([alertArg boolValue]) {
+    else if ([alertArg boolValue])
         notificationTypes |= UIRemoteNotificationTypeAlert;
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000
-        UserNotificationTypes |= UIUserNotificationTypeAlert;
-#endif
-    }
-
-    notificationTypes |= UIRemoteNotificationTypeNewsstandContentAvailability;
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000
-    UserNotificationTypes |= UIUserNotificationActivationModeBackground;
-#endif
-
+    
     self.callback = [options objectForKey:@"ecb"];
 
     if (notificationTypes == UIRemoteNotificationTypeNone)
         NSLog(@"PushPlugin.register: Push notification type is set to none");
 
     isInline = NO;
-
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 80000
-    if ([[UIApplication sharedApplication]respondsToSelector:@selector(registerUserNotificationSettings:)]) {
-        UIUserNotificationSettings *settings = [UIUserNotificationSettings settingsForTypes:UserNotificationTypes categories:nil];
-        [[UIApplication sharedApplication] registerUserNotificationSettings:settings];
-        [[UIApplication sharedApplication] registerForRemoteNotifications];
-    } else {
-    		[[UIApplication sharedApplication] registerForRemoteNotificationTypes:notificationTypes];
-    }
-#else
-		[[UIApplication sharedApplication] registerForRemoteNotificationTypes:notificationTypes];
-#endif
-
+    //NSLog(@"before registering in native");
+    [[UIApplication sharedApplication] registerForRemoteNotificationTypes:notificationTypes];
+	
 	if (notificationMessage)			// if there is a pending startup notification
 		[self notificationReceived];	// go ahead and process it
 }
@@ -148,13 +114,16 @@
     NSString *token = [[[[deviceToken description] stringByReplacingOccurrencesOfString:@"<"withString:@""]
                         stringByReplacingOccurrencesOfString:@">" withString:@""]
                        stringByReplacingOccurrencesOfString: @" " withString: @""];
+    NSLog(@"native token:%@",token);
+    self.tokenid=token;
+   // [self.webView stringByEvaluatingJavaScriptFromString:[[NSString alloc] initWithFormat:@"registeredToken(%@);",token]];
     [results setValue:token forKey:@"deviceToken"];
-
+    
     #if !TARGET_IPHONE_SIMULATOR
         // Get Bundle Info for Remote Registration (handy if you have more than one app)
         [results setValue:[[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleDisplayName"] forKey:@"appName"];
         [results setValue:[[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleVersion"] forKey:@"appVersion"];
-
+        
         // Check what Notifications the user has turned on.  We registered for all three, but they may have manually disabled some or all of them.
         NSUInteger rntypes = [[UIApplication sharedApplication] enabledRemoteNotificationTypes];
 
@@ -186,8 +155,8 @@
         [results setValue:dev.name forKey:@"deviceName"];
         [results setValue:dev.model forKey:@"deviceModel"];
         [results setValue:dev.systemVersion forKey:@"deviceSystemVersion"];
-
-		[self successWithMessage:[NSString stringWithFormat:@"%@", token]];
+    //    [self successWithMessage:[[[NSString stringWithFormat:@"{ \"token\":\"%@\",\"frm\":\"register\"}", token] stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"]
+    [self successWithMessage:[NSString stringWithFormat:@"%@", token] ];
     #endif
 }
 
@@ -212,14 +181,25 @@
         }
 		else
             [jsonStr appendFormat:@"foreground:\"%d\"", 0];
-
+        
         [jsonStr appendString:@"}"];
-
-        NSLog(@"Msg: %@", jsonStr);
-
+        NSLog(@"parsed notification %@:",jsonStr);
+       // NSLog(@"didReceiveNotification%@",NSLocalizedString(jsonStr,nil));
         NSString * jsCallBack = [NSString stringWithFormat:@"%@(%@);", self.callback, jsonStr];
+        
+        /*
+         UILocalNotification *localNotification = [[UILocalNotification alloc] init];
+         localNotification.fireDate = [NSDate dateWithTimeIntervalSinceNow:5];
+         localNotification.alertBody = @"new Blog Posted at iOScreator.com";
+         localNotification.timeZone = [NSTimeZone defaultTimeZone];
+         localNotification.applicationIconBadgeNumber = [[UIApplication sharedApplication] applicationIconBadgeNumber] + 1;
+         
+         [[UIApplication sharedApplication] scheduleLocalNotification:localNotification];
+         */
+        
+        
         [self.webView stringByEvaluatingJavaScriptFromString:jsCallBack];
-
+        //[self.webView stringByEvaluatingJavaScriptFromString:@"alert('haiiii')"];
         self.notificationMessage = nil;
     }
 }
@@ -229,23 +209,47 @@
 {
     NSArray         *keys = [inDictionary allKeys];
     NSString        *key;
-
+    
+    NSLog(@"%@",keys );
     for (key in keys)
     {
         id thisObject = [inDictionary objectForKey:key];
-
+        NSString *loc_key=@"loc-key";
         if ([thisObject isKindOfClass:[NSDictionary class]])
             [self parseDictionary:thisObject intoJSON:jsonString];
-        else if ([thisObject isKindOfClass:[NSString class]])
-             [jsonString appendFormat:@"\"%@\":\"%@\",",
-              key,
-              [[[[inDictionary objectForKey:key]
+        else if ([thisObject isKindOfClass:[NSString class]]){
+                [jsonString appendFormat:@"\"%@\":\"%@\",",
+                  key,
+                  [[[[inDictionary objectForKey:key]
+                    stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"]
+                    stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""]
+                    stringByReplacingOccurrencesOfString:@"\n" withString:@"\\n"]];
+                if([loc_key isEqualToString:key]){
+                    [jsonString appendFormat:@"\"loc-value\":\"%@\",",[[[NSLocalizedString([inDictionary objectForKey:key], nil)stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"]
+                                                                        stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""]
+                                                                       stringByReplacingOccurrencesOfString:@"\n" withString:@"\\n"]];
+                }
+            
+        }
+        else if([thisObject isKindOfClass:[NSArray class]]){
+            NSMutableString *loc_args_val=[[NSMutableString alloc] init] ;
+            NSMutableString *val=[[NSMutableString alloc] init];
+            for(val in thisObject){
+                [loc_args_val appendFormat:@"'%@',",val];
+            }
+            [loc_args_val appendString:@"''"];
+          //  NSLog(@"%@",arraystr);
+            [jsonString appendFormat:@"\"%@\":\"[%@]\",",
+             key,
+             [[[loc_args_val
                 stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"]
-                 stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""]
-                 stringByReplacingOccurrencesOfString:@"\n" withString:@"\\n"]];
-        else {
+               stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""]
+              stringByReplacingOccurrencesOfString:@"\n" withString:@"\\n"]  ];
+
+        }else{
             [jsonString appendFormat:@"\"%@\":\"%@\",", key, [inDictionary objectForKey:key]];
         }
+        
     }
 }
 
@@ -262,6 +266,7 @@
 }
 -(void)successWithMessage:(NSString *)message
 {
+  //  NSLog(@"in successWithMessage %@",message);
     if (self.callbackId != nil)
     {
         CDVPluginResult *commandResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:message];
@@ -273,8 +278,9 @@
 {
     NSString        *errorMessage = (error) ? [NSString stringWithFormat:@"%@ - %@", message, [error localizedDescription]] : message;
     CDVPluginResult *commandResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:errorMessage];
-
+    
     [self.commandDelegate sendPluginResult:commandResult callbackId:self.callbackId];
 }
+
 
 @end
